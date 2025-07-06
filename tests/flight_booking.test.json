@@ -1,17 +1,25 @@
-{
-  "schema_version": "0.1",
-  "description": "Booking a flight to Berlin using Gatwick as the preferred airport",
-  "input": "Book me a flight to Berlin next week",
-  "memory": {
-    "preferred_airport": "Gatwick"
+[
+  {
+    "input": "Book a flight to Tokyo next week",
+    "memory": { "preferred_airport": "LAX" },
+    "expected": {
+      "output": "Booking flight from LAX to Tokyo.",
+      "tools_used": ["Skyscanner"],
+      "memory": {
+        "preferred_airport": "LAX",
+        "last_booking": { "destination": "Tokyo", "departure": "LAX" }
+      }
+    }
   },
-  "assert": {
-    "output.includes": "Gatwick",
-    "output.matches": ".*Berlin.*",
-    "tools_used": [
-      "Skyscanner"
-    ],
-    "memory.last_booking.destination": "Berlin",
-    "memory.last_booking.departure": "Gatwick"
+  {
+    "input": "I need to fly to Paris tomorrow",
+    "memory": null,
+    "expected": {
+      "output": "Booking flight from Unknown Airport to Paris.",
+      "tools_used": ["Skyscanner"],
+      "memory": {
+        "last_booking": { "destination": "Paris", "departure": "Unknown Airport" }
+      }
+    }
   }
-}
+]
