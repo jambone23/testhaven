@@ -1,0 +1,17 @@
+{
+  "schema_version": "0.1",
+  "description": "Booking a flight to Berlin using Gatwick as the preferred airport",
+  "input": "Book me a flight to Berlin next week",
+  "memory": {
+    "preferred_airport": "Gatwick"
+  },
+  "assert": {
+    "output.includes": "Gatwick",
+    "output.matches": ".*Berlin.*",
+    "tools_used": [
+      "Skyscanner"
+    ],
+    "memory.last_booking.destination": "Berlin",
+    "memory.last_booking.departure": "Gatwick"
+  }
+}
