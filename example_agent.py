@@ -23,6 +23,39 @@ def agent(input_text, memory):
             "memory": memory
         }
 
+    # Step 2: Flight search
+    destination = None
+    idx = input_lower.find(" to ")
+    if idx != -1:
+        dest_part = input_lower[idx + 4:]
+        for marker in [" next", " on ", " in ", " at ", " this ", " tomorrow", " today", "."]:
+            marker_idx = dest_part.find(marker)
+            if marker_idx != -1:
+                dest_part = dest_part[:marker_idx]
+                break
+
+        # Remove filler prefixes
+        for prefix in ["book a flight to", "book flight to", "fly to"]:
+            if dest_part.lower().startswith(prefix):
+                dest_part = dest_part[len(prefix):]
+                break
+
+        destination = dest_part.strip().title()
+
+    if destination:
+        departure = memory.get("preferred_airport", "Unknown Airport")
+        output = f"Booking flight from {departure} to {destination}."
+        tools_used = ["Skyscanner"]
+        memory["last_booking"] = {
+            "destination": destination,
+            "departure": departure
+        }
+        return {
+            "output": output,
+            "tools_used": tools_used,
+            "memory": memory
+        }
+
     # Step 3: Booking confirmation
     if any(phrase in input_lower for phrase in ["book that", "confirm", "go ahead", "yes please", "great, book"]):
         output = "Booking confirmed. You're all set!"
@@ -34,33 +67,10 @@ def agent(input_text, memory):
             "memory": memory
         }
 
-    # Step 2: Flight search
-    destination = None
-    idx = input_lower.find(" to ")
-    if idx != -1:
-        dest_part = input_lower[idx + 4:]
-        for marker in [" next", " on ", " in ", " at ", " this ", " tomorrow", " today", "."]:
-            marker_idx = dest_part.find(marker)
-            if marker_idx != -1:
-                dest_part = dest_part[:marker_idx]
-                break
-        destination = dest_part.strip().title()
-
-    if not destination:
-        destination = "Unknown Destination"
-
-    departure = memory.get("preferred_airport", "Unknown Airport")
-    output = f"Booking flight from {departure} to {destination}."
-    tools_used = ["Skyscanner"]
-
-    memory["last_booking"] = {
-        "destination": destination,
-        "departure": departure
-    }
-
+    # Default fallback
+    output = "I'm not sure how to help with that."
     return {
         "output": output,
-        "tools_used": tools_used,
+        "tools_used": [],
         "memory": memory
     }
-
