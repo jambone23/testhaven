@@ -2,13 +2,15 @@
 
 TestHaven is a CLI-first test harness for AI agents, verifying that they produce the expected output, use the correct tools, and maintain the expected memory state.
 
+
 ## Key Features
 
 - Assert on agent output (supports substring matching, regex, or exact match)
 - Track tool usage (ensure the agent invoked the expected tools)
 - Verify memory state (dot-path assertions on nested memory fields)
 - Run standalone or in CI (exit code indicates pass/fail)
-- Write tests in YAML (no coding required)
+- Write tests in JSON or YAML (no coding required)
+
 
 ## Installation
 
@@ -20,41 +22,65 @@ cd testhaven
 pip install -e .
 ```
 
+To enable YAML support (optional), install PyYAML:
+
+```bash
+pip install pyyaml
+```
+
+
 ## Quick Example
 
-**Test file: `tests/flight_booking.test.yaml`**
+**Test file: `tests/flight_booking.test.json`**
 
-```yaml
-schema_version: "0.1"
-description: "Flight booking to Berlin via Gatwick"
-input: "Book me a flight to Berlin next week"
-memory:
-  preferred_airport: "Gatwick"
-assert:
-  output.includes: "Gatwick"
-  output.matches: ".*Berlin.*"
-  tools_used:
-    - Skyscanner
-  memory.last_booking.destination: "Berlin"
-  memory.last_booking.departure: "Gatwick"
+```json
+{
+  "schema_version": "0.1",
+  "description": "Flight booking to Berlin via Gatwick",
+  "input": "Book me a flight to Berlin next week",
+  "memory": {
+    "preferred_airport": "Gatwick"
+  },
+  "assert": {
+    "output.includes": "Gatwick",
+    "output.matches": ".*Berlin.*",
+    "tools_used": ["Skyscanner"],
+    "memory.last_booking.destination": "Berlin",
+    "memory.last_booking.departure": "Gatwick"
+  }
+}
 ```
 
 **Agent function: `example_agent.py`**
 
 ```python
 def agent(input_text, memory):
-    destination = "Berlin" if "Berlin" in input_text else "Unknown"
-    departure = memory.get("preferred_airport", "Heathrow")
-    tools_used = ["Skyscanner"]
-    memory["last_booking"] = {"destination": destination, "departure": departure}
-    output = f"Booking flight from {departure} to {destination}."
-    return {"output": output, "tools_used": tools_used, "memory": memory}
+    if memory is None:
+        memory = {}
+    destination = "Unknown Destination"
+    idx = input_text.lower().find(" to ")
+    if idx != -1:
+        dest_part = input_text[idx+4:]
+        markers = [" next", " on ", " in ", " at ", " this ", " tomorrow", " today"]
+        for marker in markers:
+            m_idx = dest_part.lower().find(marker)
+            if m_idx != -1:
+                dest_part = dest_part[:m_idx]
+                break
+        destination = dest_part.strip().strip(".,!?") or destination
+    departure = memory.get("preferred_airport", "Unknown Airport")
+    memory['last_booking'] = {"destination": destination, "departure": departure}
+    return {
+        "output": f"Booking flight from {departure} to {destination}.",
+        "tools_used": ["Skyscanner"],
+        "memory": memory
+    }
 ```
 
 **Run the test:**
 
 ```bash
-testhaven tests/flight_booking.test.yaml example_agent.py
+testhaven tests/flight_booking.test.json example_agent.py
 ```
 
 Or run all tests in a folder:
@@ -63,9 +89,18 @@ Or run all tests in a folder:
 testhaven --run-all tests/ example_agent.py
 ```
 
+You can also run:
+
+```bash
+testhaven --help
+```
+
+To see usage options and flags.
+
+
 ## Test File Schema
 
-See `testhaven_schema.md` for full details. Each test file includes:
+Each test file includes:
 
 - `schema_version`: currently `"0.1"`
 - `description`: short test description
@@ -80,6 +115,7 @@ Supported assertions include:
 - `output.equals`: check that output exactly matches a string
 - `tools_used`: check that the agent used the expected tools
 - `memory.<path>`: check the value of a nested memory field (using dot-path)
+
 
 ## Continuous Integration
 
@@ -97,8 +133,10 @@ jobs:
         with:
           python-version: '3.10'
       - run: pip install -e .
+      - run: pip install pyyaml  # Optional, for YAML support
       - run: testhaven --run-all tests/ example_agent.py
 ```
+
 
 ## Contributing to TestHaven
 
@@ -110,10 +148,11 @@ If you’d like to contribute, here are the steps to get started:
 2. **Create a feature branch:** It’s good practice to create a new branch for your work (for example, `feature/new-awesome-thing`).
 3. **Make your changes with care:** Implement your bug fix or new feature. Try to follow the coding style of the project for consistency. If you’re adding a feature or fixing a bug, consider writing tests to cover your changes.
 4. **Run tests:** Before submitting, run the test suite to ensure everything still passes. This helps maintain quality and makes the review process smoother.
-5. **Open an issue (optional but recommended):** If your contribution is a significant change or new feature, please open an issue to discuss it with the maintainers first. This step isn’t required for small fixes, but discussion can save time and ensure your idea aligns with the project’s goals.
-6. **Submit a pull request:** Push your branch to your GitHub fork and open a pull request against TestHaven’s main repository. In the PR description, clearly explain your changes and mention which issue (if any) you’re addressing. Be sure to follow our pull request template and any guidelines (including commit message conventions) if provided.
+5. **Open an issue (optional but recommended):** If your contribution is a significant change or new feature, please open an issue to discuss it with the maintainers first.
+6. **Submit a pull request:** Push your branch to your GitHub fork and open a pull request against TestHaven’s main repository. In the PR description, clearly explain your changes and mention which issue (if any) you’re addressing.
 
-Feel free to also open issues for any bugs you find or feature requests you have – we appreciate your feedback. You can also check if there are “good first issues” to start with. We aim to review pull requests promptly and will provide constructive feedback. Thank you for helping to improve TestHaven!
+We aim to review pull requests promptly and will provide constructive feedback. Thank you for helping to improve TestHaven!
+
 
 ## Licence
 
