@@ -77,7 +77,7 @@ def assert_case(test, agent_func):
                 print(f'  {RED}{status:<5}{RESET} output.equals: expected exactly "{expected}", got "{actual_output}"')
                 passed = False
             else:
-                print(f"  {GREEN}{status:<5}{RESET} output.equals: "{expected}"")
+                print(f'  {GREEN}{status:<5}{RESET} output.equals: "{expected}"')
                 passed_checks += 1
 
         elif key.startswith("output.includes"):
