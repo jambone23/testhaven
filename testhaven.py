@@ -74,7 +74,7 @@ def assert_case(test, agent_func):
             # exact match of output
             status = "PASS" if actual_output == expected else "FAIL"
             if status == "FAIL":
-                print(f"  {RED}{status:<5}{RESET} output.equals: expected exactly "{expected}", got "{actual_output}"")
+                print(f'  {RED}{status:<5}{RESET} output.equals: expected exactly "{expected}", got "{actual_output}"')
                 passed = False
             else:
                 print(f"  {GREEN}{status:<5}{RESET} output.equals: "{expected}"")
