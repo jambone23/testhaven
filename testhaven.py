@@ -5,6 +5,7 @@ import os
 import glob
 import importlib.util
 import argparse
+import difflib
 
 # ANSI color codes for output formatting
 GREEN = "\033[92m"
@@ -13,8 +14,19 @@ YELLOW = "\033[93m"
 RESET = "\033[0m"
 BOLD  = "\033[1m"
 
+def make_inline_diff(expected: str, actual: str) -> str:
+    """Return a unified diff between two strings."""
+    diff = difflib.unified_diff(
+        expected.splitlines(),
+        actual.splitlines(),
+        lineterm="",
+        fromfile="expected",
+        tofile="actual",
+        n=1
+    )
+    return "\n".join(diff)
+
 def load_test_case(path):
-    """Load a test case from JSON or YAML file, upgrading old formats to new schema."""
     with open(path, "r") as f:
         if path.endswith((".yaml", ".yml")):
             try:
@@ -25,11 +37,9 @@ def load_test_case(path):
         else:
             data = json.load(f)
 
-    # Handle legacy: if this is a list of single-turn tests (JSON array)
     if isinstance(data, list):
         return {"description": f"Multiple tests in {os.path.basename(path)}", "steps": data}
 
-    # Handle legacy single-turn format (no steps)
     if "steps" not in data:
         legacy = data
         return {
@@ -45,7 +55,6 @@ def load_test_case(path):
     return data
 
 def get_nested(memory, path):
-    """Get nested value from memory dict using dot-path (e.g. 'booking.status')."""
     parts = path.split(".")
     for p in parts:
         if isinstance(memory, dict) and p in memory:
@@ -55,7 +64,6 @@ def get_nested(memory, path):
     return memory
 
 def normalize_tools(tools_val):
-    """Convert tools_used value to a flat list of strings."""
     if isinstance(tools_val, list):
         names = []
         for t in tools_val:
@@ -79,17 +87,23 @@ def run_assertions(output, tools, memory, asserts):
         if key.startswith("output.equals"):
             status = "PASS" if output == expected else "FAIL"
             if status == "FAIL":
-                print(f"  {RED}{status:<5}{RESET} output.equals: expected \"{expected}\", got \"{output}\"")
+                print(f"  {RED}{status:<5}{RESET} output.equals:")
+                print(f"    expected: {expected}")
+                print(f"    got     : {output}")
+                print("    diff:")
+                print(make_inline_diff(expected, output))
             else:
                 print(f"  {GREEN}{status:<5}{RESET} output.equals: \"{expected}\"")
-                passed_checks += 1
+            passed_checks += (status == "PASS")
+
         elif key.startswith("output.includes"):
             status = "PASS" if expected in output else "FAIL"
             if status == "FAIL":
                 print(f"  {RED}{status:<5}{RESET} output.includes: \"{expected}\" (output was: \"{output}\")")
             else:
                 print(f"  {GREEN}{status:<5}{RESET} output.includes: \"{expected}\"")
-                passed_checks += 1
+            passed_checks += (status == "PASS")
+
         elif key.startswith("output.matches"):
             matched = bool(re.search(expected, output))
             status = "PASS" if matched else "FAIL"
@@ -97,7 +111,8 @@ def run_assertions(output, tools, memory, asserts):
                 print(f"  {RED}{status:<5}{RESET} output.matches: /{expected}/ (output was: \"{output}\")")
             else:
                 print(f"  {GREEN}{status:<5}{RESET} output.matches: /{expected}/")
-                passed_checks += 1
+            passed_checks += (status == "PASS")
+
         elif key.startswith("tools_used"):
             expected_list = expected if isinstance(expected, list) else [expected]
             status = "PASS" if expected_list == tools_list else "FAIL"
@@ -105,16 +120,23 @@ def run_assertions(output, tools, memory, asserts):
                 print(f"  {RED}{status:<5}{RESET} tools_used expected: {expected_list}, got: {tools_list}")
             else:
                 print(f"  {GREEN}{status:<5}{RESET} tools_used: {expected_list}")
-                passed_checks += 1
+            passed_checks += (status == "PASS")
+
         elif key.startswith("memory."):
             path = key[len("memory."):]
             actual_value = get_nested(memory, path)
             status = "PASS" if actual_value == expected else "FAIL"
             if status == "FAIL":
-                print(f"  {RED}{status:<5}{RESET} memory.{path}: expected {expected}, got {actual_value}")
+                print(f"  {RED}{status:<5}{RESET} memory.{path}:")
+                print(f"    expected: {expected}")
+                print(f"    got     : {actual_value}")
+                if isinstance(expected, str) and isinstance(actual_value, str):
+                    print("    diff:")
+                    print(make_inline_diff(expected, actual_value))
             else:
                 print(f"  {GREEN}{status:<5}{RESET} memory.{path} = {expected}")
-                passed_checks += 1
+            passed_checks += (status == "PASS")
+
         else:
             print(f"  {RED}FAIL {RESET} Unknown assert key: {key}")
             passed = False
@@ -128,7 +150,6 @@ def run_assertions(output, tools, memory, asserts):
     return passed
 
 def assert_case(test, agent_func):
-    """Run a multi-step test case with memory propagation."""
     description = test.get("description", "<Unnamed test>")
     memory = test.get("memory", {})
     steps = test.get("steps", [])
@@ -144,20 +165,25 @@ def assert_case(test, agent_func):
         tools_used = result.get("tools_used", [])
         memory = result.get("memory", {})
 
-        # Support both 'assert' (granular) and 'expected' (strict) styles
         if "assert" in step:
             passed = run_assertions(output, tools_used, memory, step["assert"])
         elif "expected" in step:
             passed = True
             expected = step["expected"]
             if output != expected.get("output"):
-                print(f"  {RED}FAIL {RESET} output mismatch: expected \"{expected.get('output')}\", got \"{output}\"")
+                print(f"  {RED}FAIL {RESET} output mismatch:")
+                print(f"    expected: {expected.get('output')}")
+                print(f"    got     : {output}")
+                print("    diff:")
+                print(make_inline_diff(expected.get("output", ""), output))
                 passed = False
             if normalize_tools(tools_used) != normalize_tools(expected.get("tools_used", [])):
                 print(f"  {RED}FAIL {RESET} tools_used mismatch: expected {expected.get('tools_used')}, got {tools_used}")
                 passed = False
             if memory != expected.get("memory", {}):
-                print(f"  {RED}FAIL {RESET} memory mismatch:\n  expected: {expected.get('memory')}\n  got: {memory}")
+                print(f"  {RED}FAIL {RESET} memory mismatch:")
+                print(f"    expected: {expected.get('memory')}")
+                print(f"    got     : {memory}")
                 passed = False
             if passed:
                 print(f"{GREEN}  All expected fields matched.{RESET}")
@@ -218,5 +244,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
