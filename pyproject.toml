@@ -9,7 +9,7 @@ description = "CLI-first test harness for AI agents"
 readme = "README.md"
 requires-python = ">=3.8"
 keywords = ["testing", "harness", "agents", "automation"]
-license = { file = "LICENSE" }
+license = "MIT"
 authors = [
     { name = "TestHaven Team", email = "hi@testhaven.io" }
 ]
@@ -31,6 +31,7 @@ dependencies = [
     "click>=8.0",
     "colorama>=0.4.4; platform_system == 'Windows'"
 ]
+py_modules = ["testhaven"]
 
 [project.optional-dependencies]
 yaml = [
