@@ -1,25 +1,23 @@
-[
-  {
-    "input": "Book a flight to Tokyo next week",
-    "memory": { "preferred_airport": "LAX" },
-    "expected": {
-      "output": "Booking flight from LAX to Tokyo.",
-      "tools_used": ["Skyscanner"],
-      "memory": {
-        "preferred_airport": "LAX",
-        "last_booking": { "destination": "Tokyo", "departure": "LAX" }
-      }
-    }
-  },
-  {
-    "input": "I need to fly to Paris tomorrow",
-    "memory": null,
-    "expected": {
-      "output": "Booking flight from Unknown Airport to Paris.",
-      "tools_used": ["Skyscanner"],
-      "memory": {
-        "last_booking": { "destination": "Paris", "departure": "Unknown Airport" }
-      }
-    }
-  }
-]
+description: "Multi-turn test: greeting, booking a flight, and confirming the booking"
+memory:
+  preferred_airport: "Gatwick"
+steps:
+  - input: "Hello"
+    assert:
+      output.includes: "Hello"
+      tools_used: []
+      memory.greeted: true
+
+  - input: "I want to book a flight to Berlin next week."
+    assert:
+      output.includes: "Gatwick"
+      output.matches: ".*Berlin.*"
+      tools_used: ["Skyscanner"]
+      memory.last_booking.destination: "Berlin"
+      memory.last_booking.departure: "Gatwick"
+
+  - input: "Great, book that please."
+    assert:
+      output.includes: "Booking confirmed"
+      tools_used: ["BookingAPI"]
+      memory.booking.status: "confirmed"
