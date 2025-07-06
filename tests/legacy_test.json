@@ -1,0 +1,13 @@
+{
+  "description": "Legacy format: flight booking to Tokyo",
+  "input": "Book a flight to Tokyo next week",
+  "memory": {
+    "preferred_airport": "LAX"
+  },
+  "assert": {
+    "output.equals": "Booking flight from LAX to Tokyo.",
+    "tools_used": ["Skyscanner"],
+    "memory.last_booking.destination": "Tokyo",
+    "memory.last_booking.departure": "LAX"
+  }
+}
