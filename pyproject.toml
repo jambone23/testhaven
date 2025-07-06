@@ -31,7 +31,9 @@ dependencies = [
     "click>=8.0",
     "colorama>=0.4.4; platform_system == 'Windows'"
 ]
-py_modules = ["testhaven"]
+[tool.setuptools]
+
+py-modules = ["testhaven"]
 
 [project.optional-dependencies]
 yaml = [
