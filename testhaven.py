@@ -1,9 +1,10 @@
-import json  
-import re  
-import sys  
-import os  
-import glob  
+import json
+import re
+import sys
+import os
+import glob
 import importlib.util
+import argparse
 
 # ANSI color codes for output formatting
 GREEN = "\033[92m"
@@ -68,103 +69,134 @@ def assert_case(test, agent_func):
         actual_tools_list = [actual_tools]
 
     # Check each assertion
-        for key, expected in test["assert"].items():
+    for key, expected in test["assert"].items():
         total_checks += 1
         if key.startswith("output.equals"):
+            # exact match of output
             status = "PASS" if actual_output == expected else "FAIL"
             if status == "FAIL":
-                print(f'  {RED}{status:<5}{RESET} output.equals: expected exactly "{expected}", got "{actual_output}"')
+                print(f"  {RED}{status:<5}{RESET} output.equals: expected exactly \"{expected}\", got \"{actual_output}\"")
                 passed = False
             else:
-                print(f'  {GREEN}{status:<5}{RESET} output.equals: "{expected}"')
+                print(f"  {GREEN}{status:<5}{RESET} output.equals: \"{expected}\"")
                 passed_checks += 1
 
         elif key.startswith("output.includes"):
+            # substring check
             status = "PASS" if expected in actual_output else "FAIL"
             if status == "FAIL":
-                print(f'  {RED}{status:<5}{RESET} output.includes: "{expected}" (output was: "{actual_output}")')
+                print(f"  {RED}{status:<5}{RESET} output.includes: \"{expected}\" (output was: \"{actual_output}\")")
                 passed = False
             else:
-                print(f'  {GREEN}{status:<5}{RESET} output.includes: "{expected}"')
+                print(f"  {GREEN}{status:<5}{RESET} output.includes: \"{expected}\"")
                 passed_checks += 1
 
         elif key.startswith("output.matches"):
+            # regex pattern check
             pattern = expected
             matched = bool(re.search(pattern, actual_output))
             status = "PASS" if matched else "FAIL"
             if status == "FAIL":
-                print(f'  {RED}{status:<5}{RESET} output.matches: /{pattern}/ (output was: "{actual_output}")')
+                print(f"  {RED}{status:<5}{RESET} output.matches: /{pattern}/ (output was: \"{actual_output}\")")
                 passed = False
             else:
-                print(f'  {GREEN}{status:<5}{RESET} output.matches: /{pattern}/')
+                print(f"  {GREEN}{status:<5}{RESET} output.matches: /{pattern}/")
                 passed_checks += 1
 
         elif key.startswith("tools_used"):
+            # expected list of tools (by name)
             expected_list = expected if isinstance(expected, list) else [expected]
             status = "PASS" if expected_list == actual_tools_list else "FAIL"
             if status == "FAIL":
-                print(f'  {RED}{status:<5}{RESET} tools_used expected: {expected_list}, got: {actual_tools_list}')
+                print(f"  {RED}{status:<5}{RESET} tools_used expected: {expected_list}, got: {actual_tools_list}")
                 passed = False
             else:
-                print(f'  {GREEN}{status:<5}{RESET} tools_used: {expected_list}')
+                print(f"  {GREEN}{status:<5}{RESET} tools_used: {expected_list}")
                 passed_checks += 1
 
         elif key.startswith("memory."):
+            # check a value in final memory state
             path = key[len("memory."):]
             actual_value = get_nested(actual_memory, path)
             status = "PASS" if actual_value == expected else "FAIL"
             if status == "FAIL":
-                print(f'  {RED}{status:<5}{RESET} memory.{path}: expected {expected}, got {actual_value}')
+                print(f"  {RED}{status:<5}{RESET} memory.{path}: expected {expected}, got {actual_value}")
                 passed = False
             else:
-                print(f'  {GREEN}{status:<5}{RESET} memory.{path} = {expected}')
+                print(f"  {GREEN}{status:<5}{RESET} memory.{path} = {expected}")
                 passed_checks += 1
 
         else:
+            # Unknown assertion key (safety check)
             status = "FAIL"
-            print(f'  {RED}{status:<5}{RESET} Unknown assert key: {key}')
+            print(f"  {RED}{status:<5}{RESET} Unknown assert key: {key}")
             passed = False
 
+    # Print summary for this test
     summary_msg = f"  Summary: {passed_checks} passed / {total_checks} total"
     if passed:
-        print(f'{GREEN}{summary_msg}{RESET}')
+        print(f"{GREEN}{summary_msg}{RESET}")
     else:
-        print(f'{RED}{summary_msg}{RESET}')
+        print(f"{RED}{summary_msg}{RESET}")
+    return passed
+
+def run_single_test(test_file, agent_path):
+    """Run a single test file against the agent module."""
+    # Dynamically import the agent module
+    spec = importlib.util.spec_from_file_location("agent_module", agent_path)
+    agent_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(agent_module)
+    # Load and execute the test
+    test = load_test_case(test_file)
+    return assert_case(test, agent_module.agent)
+
+def run_all_tests(test_dir_pattern, agent_path):
+    """Discover and run all test files (JSON/YAML) in a directory or matching a pattern."""
+    # Collect test files
+    if os.path.isdir(test_dir_pattern):
+        # gather all .test.json/.test.yaml files in the directory
+        test_files = glob.glob(os.path.join(test_dir_pattern, "*.test.json")) \
+                   + glob.glob(os.path.join(test_dir_pattern, "*.test.yaml")) \
+                   + glob.glob(os.path.join(test_dir_pattern, "*.test.yml"))
+    else:
+        # treat the input as a glob pattern or single file path
+        test_files = glob.glob(test_dir_pattern)
+    test_files = sorted(test_files)
+    total = len(test_files)
+    passed_count = 0
+    all_passed = True
+
+    print(f"\nRunning {total} test(s) from {test_dir_pattern}\n" + "-" * 40)
+    for test_file in test_files:
+        passed = run_single_test(test_file, agent_path)
+        if passed:
+            passed_count += 1
+        else:
+            all_passed = False
+
+    if total > 1:
+        print("-" * 40)
+        if all_passed:
+            print(f"{GREEN}ALL TESTS PASSED ({passed_count}/{total}){RESET}")
+        else:
+            failed_count = total - passed_count
+            print(f"{RED}{failed_count} test(s) FAILED ({passed_count}/{total} passed){RESET}")
     return all_passed
 
-
-
 def main():
-parser = argparse.ArgumentParser(
-        description="TestHaven CLI – Run structured tests on agent outputs.",
-        epilog="""
-Usage Examples:
-  testhaven my_test.test.json agent.py
-  testhaven --run-all tests/ agent.py
-
-Options:
-  --run-all    Run all test files in a directory or glob
-  --help       Show this help message
-""".strip()
-    )
+    parser = argparse.ArgumentParser(description="TestHaven CLI - Agent Testing Framework")
+    parser.add_argument("--run-all", action="store_true", help="Run all test files in a directory (or matching a glob pattern)")
+    parser.add_argument("test_path", help="Path to a test file, or a directory/pattern for multiple test files")
+    parser.add_argument("agent_path", help="Path to the agent Python file")
     args = parser.parse_args()
-    parser.add_argument("testfile", nargs="?", help="Path to test file (JSON or YAML)")
-    parser.add_argument("--run-all", metavar="PATTERN", help="Run all test files in directory or glob pattern")
-    parser.add_argument("agentfile", help="Path to agent Python file")
-
-    if args.run_all and args.testfile:
-        print("ERROR: Cannot specify both a test file and --run-all", file=sys.stderr)
-        sys.exit(1)
 
     if args.run_all:
-        all_passed = run_all_tests(args.run_all, args.agentfile)
+        all_passed = run_all_tests(args.test_path, args.agent_path)
         sys.exit(0 if all_passed else 1)
-    elif args.testfile:
-        passed = run_single_test(args.testfile, args.agentfile)
-        sys.exit(0 if passed else 1)
     else:
-        parser.print_help()
-        sys.exit(1)
+        passed = run_single_test(args.test_path, args.agent_path)
+        sys.exit(0 if passed else 1)
 
 if __name__ == "__main__":
     main()
+
